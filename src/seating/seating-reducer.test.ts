@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test'
-import { historyReducer, mapReducer } from './seating-reducer'
+import { historyReducer, MAX_CATEGORIES, mapReducer } from './seating-reducer'
 import { SAMPLE_MAP } from './sample-venue'
 import { resolveSeatCategoryId } from './seat-status'
 import type { HistoryState } from './seating-reducer.types'
@@ -7,6 +7,49 @@ import type { HistoryState } from './seating-reducer.types'
 const center = SAMPLE_MAP.elements.find((e) => e.id === 'center')!
 
 describe('mapReducer', () => {
+  it('returns the same map for a move by zero', () => {
+    expect(mapReducer(SAMPLE_MAP, { type: 'move-elements', ids: ['stage'], dx: 0, dy: 0 })).toBe(
+      SAMPLE_MAP,
+    )
+  })
+
+  it('removes every override of reset seats', () => {
+    const map = mapReducer(SAMPLE_MAP, { type: 'reset-seats', seatIds: ['center:5:0', 't5:0:4'] })
+    expect(map.seatOverrides['center:5:0']).toBeUndefined()
+    expect(map.seatOverrides['t5:0:4']).toBeUndefined()
+    expect(map.seatOverrides['center:5:1']).toEqual({ accessible: true })
+  })
+
+  it('updates an existing category in place and appends new ones', () => {
+    const renamed = { ...SAMPLE_MAP.categories[0]!, name: 'Premium' }
+    const updated = mapReducer(SAMPLE_MAP, { type: 'upsert-category', category: renamed })
+    expect(updated.categories[0]?.name).toBe('Premium')
+    expect(updated.categories).toHaveLength(SAMPLE_MAP.categories.length)
+
+    const added = mapReducer(SAMPLE_MAP, {
+      type: 'upsert-category',
+      category: { ...renamed, id: 'cat_new' },
+    })
+    expect(added.categories.at(-1)?.id).toBe('cat_new')
+  })
+
+  it('refuses new categories beyond the limit', () => {
+    const template = SAMPLE_MAP.categories[0]!
+    const full = {
+      ...SAMPLE_MAP,
+      categories: Array.from({ length: MAX_CATEGORIES }, (_, i) => ({ ...template, id: `c${i}` })),
+    }
+    expect(
+      mapReducer(full, { type: 'upsert-category', category: { ...template, id: 'one_more' } }),
+    ).toBe(full)
+  })
+
+  it('patches map settings', () => {
+    expect(
+      mapReducer(SAMPLE_MAP, { type: 'update-settings', patch: { name: 'Hall B' } }).name,
+    ).toBe('Hall B')
+  })
+
   it('lets a seat override win over the element category', () => {
     const map = mapReducer(SAMPLE_MAP, {
       type: 'update-seats',
@@ -63,6 +106,30 @@ describe('historyReducer', () => {
     const undone = historyReducer(edited, { type: 'undo' })
     expect(undone.present).toBe(SAMPLE_MAP)
     expect(historyReducer(undone, { type: 'redo' }).present).toBe(edited.present)
+  })
+
+  it('ignores undo and redo with empty stacks and edits that change nothing', () => {
+    expect(historyReducer(initial, { type: 'undo' })).toBe(initial)
+    expect(historyReducer(initial, { type: 'redo' })).toBe(initial)
+    expect(historyReducer(initial, { type: 'move-elements', ids: ['stage'], dx: 0, dy: 0 })).toBe(
+      initial,
+    )
+  })
+
+  it('caps the undo history at 100 entries', () => {
+    let state = initial
+    for (let i = 0; i < 120; i++)
+      state = historyReducer(state, { type: 'move-elements', ids: ['stage'], dx: 1, dy: 0 })
+    expect(state.past).toHaveLength(100)
+  })
+
+  it('clears redo after a new edit', () => {
+    const undone = historyReducer(
+      historyReducer(initial, { type: 'move-elements', ids: ['stage'], dx: 1, dy: 0 }),
+      { type: 'undo' },
+    )
+    const edited = historyReducer(undone, { type: 'move-elements', ids: ['bar'], dx: 1, dy: 0 })
+    expect(edited.future).toEqual([])
   })
 
   it('groups unrecorded edits behind a single checkpoint', () => {
