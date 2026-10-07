@@ -10,6 +10,7 @@
     "typecheck": "tsc",
     "test": "vp test run",
     "coverage": "vp test run --coverage",
+    "e2e": "playwright test",
     "check": "vp check"
   },
   "dependencies": {
@@ -18,16 +19,16 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@stylexjs/unplugin": "^0.19.1",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "@vitest/coverage-v8": "5.0.3",
-    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "vitest": "catalog:",
-    "vitest-browser-react": "^2.3.0"
+    "vitest": "catalog:"
   }
 }
